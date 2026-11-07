@@ -16,6 +16,7 @@
     "docker:logs": "docker compose logs -f",
     "db:migrate": "npm --workspace=db run migrate",
     "db:seed": "npm --workspace=db run seed",
+    "sim": "npm --workspace=@coldaisle/sim run sim",
     "test": "vitest run",
     "test:watch": "vitest"
   },
