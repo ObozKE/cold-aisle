@@ -2,9 +2,10 @@ import { config } from './config.js';
 import { testDbConnection } from './db/pool.js';
 import { createHttpServer } from './http/server.js';
 import { startMqttSubscriber } from './mqtt/subscriber.js';
+import { startStaleDetector, stopStaleDetector } from './engine/stale.js';
 
 async function main() {
-  console.log('🚀 [ColdAisle Ingest] Initializing Telemetry Ingest & Derivation Service...');
+  console.log('🚀 [ColdAisle Ingest] Initializing Telemetry Ingest & Rule Engine...');
 
   // 1. Verify Database
   const dbOk = await testDbConnection();
@@ -24,9 +25,13 @@ async function main() {
   // 3. Start MQTT Subscriber
   const mqttClient = startMqttSubscriber();
 
+  // 4. Start Background Device Stale Detector
+  const staleTimer = startStaleDetector(config.STALE_CHECK_INTERVAL_MS);
+
   // Graceful shutdown handling
   const shutdown = async (signal: string) => {
     console.log(`\n🛑 [ColdAisle Ingest] Received ${signal}. Shutting down gracefully...`);
+    stopStaleDetector();
     server.close(() => console.log('  ✓ HTTP server closed.'));
     mqttClient.end(false, () => console.log('  ✓ MQTT client disconnected.'));
     process.exit(0);
