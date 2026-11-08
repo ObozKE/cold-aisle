@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "author": "Antigravity DCIM Engineering",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht_cold",
+      "top": -170,
+      "left": -200,
+      "attrs": {
+        "temperature": "22.4",
+        "humidity": "46"
+      }
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht_hot",
+      "top": -170,
+      "left": 200,
+      "attrs": {
+        "temperature": "35.1",
+        "humidity": "28"
+      }
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "sonar_cdu",
+      "top": 40,
+      "left": -310,
+      "attrs": {
+        "distance": "14.2"
+      }
+    },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "sonar_diesel",
+      "top": 40,
+      "left": 310,
+      "attrs": {
+        "distance": "31"
+      }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot_pressure",
+      "top": 250,
+      "left": -180,
+      "attrs": {
+        "value": "665"
+      }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot_it_load",
+      "top": 250,
+      "left": 180,
+      "attrs": {
+        "value": "532"
+      }
+    }
+  ],
+  "connections": [
+    [ "esp:TX", "$serial:RX", "", [] ],
+    [ "esp:RX", "$serial:TX", "", [] ],
+
+    [ "esp:3V3", "dht_cold:VCC", "red", [ "v-30", "h-120" ] ],
+    [ "esp:GND.1", "dht_cold:GND", "black", [ "v-40", "h-110" ] ],
+    [ "esp:4", "dht_cold:SDA", "blue", [ "v-20", "h-80" ] ],
+
+    [ "esp:3V3", "dht_hot:VCC", "red", [ "v-30", "h120" ] ],
+    [ "esp:GND.2", "dht_hot:GND", "black", [ "v-40", "h110" ] ],
+    [ "esp:16", "dht_hot:SDA", "gold", [ "v-20", "h80" ] ],
+
+    [ "esp:5V", "sonar_cdu:VCC", "red", [ "v20", "h-220" ] ],
+    [ "esp:GND.1", "sonar_cdu:GND", "black", [ "v10", "h-210" ] ],
+    [ "esp:18", "sonar_cdu:TRIG", "orange", [ "v10", "h-170" ] ],
+    [ "esp:19", "sonar_cdu:ECHO", "yellow", [ "v15", "h-160" ] ],
+
+    [ "esp:5V", "sonar_diesel:VCC", "red", [ "v20", "h220" ] ],
+    [ "esp:GND.2", "sonar_diesel:GND", "black", [ "v10", "h210" ] ],
+    [ "esp:21", "sonar_diesel:TRIG", "purple", [ "v10", "h170" ] ],
+    [ "esp:22", "sonar_diesel:ECHO", "cyan", [ "v15", "h160" ] ],
+
+    [ "esp:3V3", "pot_pressure:VCC", "red", [ "v120", "h-100" ] ],
+    [ "esp:GND.1", "pot_pressure:GND", "black", [ "v130", "h-90" ] ],
+    [ "esp:34", "pot_pressure:SIG", "green", [ "v110", "h-80" ] ],
+
+    [ "esp:3V3", "pot_it_load:VCC", "red", [ "v120", "h100" ] ],
+    [ "esp:GND.2", "pot_it_load:GND", "black", [ "v130", "h90" ] ],
+    [ "esp:35", "pot_it_load:SIG", "violet", [ "v110", "h80" ] ]
+  ],
+  "dependencies": {}
+}
