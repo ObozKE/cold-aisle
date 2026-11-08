@@ -3,6 +3,9 @@ import cors from 'cors';
 import { ingestRouter } from './routes/ingest.js';
 import { alertsRouter } from './routes/alerts.js';
 import { mockOncallRouter } from './routes/mockOncall.js';
+import { streamRouter } from './routes/stream.js';
+import { scenarioRouter } from './routes/scenario.js';
+import { telemetryQueryRouter } from './routes/telemetry.js';
 import { pool } from '../db/pool.js';
 
 export function createHttpServer() {
@@ -29,13 +32,20 @@ export function createHttpServer() {
     }
   });
 
-  // Mock On-Call Receiver endpoint (both /api/mock-oncall and root /mock-oncall)
+  // Mock On-Call Receiver endpoints
   app.use('/api', mockOncallRouter);
   app.use(mockOncallRouter);
+
+  // Realtime Server-Sent Events (SSE) Stream
+  app.use('/api/v1', streamRouter);
+
+  // Scenario Remote Control API
+  app.use('/api/v1', scenarioRouter);
 
   // REST API v1
   app.use('/api/v1', ingestRouter);
   app.use('/api/v1', alertsRouter);
+  app.use('/api/v1', telemetryQueryRouter);
 
   return app;
 }
