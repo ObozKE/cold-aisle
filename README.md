@@ -17,50 +17,153 @@ ColdAisle ingests physical sensor streams from edge microcontrollers (ESP32 / Wo
 
 ## 1. System Architecture
 
+ColdAisle is engineered as an event-driven, decoupled digital twin and DCIM telemetry pipeline. The platform separates raw physical edge ingestion from thermodynamic model computation, alert evaluation, and real-time visualization.
+
+### 1.1 Architecture Topology
+
+```
++──────────────────────────────────────────────────────────────────────────────────────────────────────────────────+
+|                                              PHYSICAL & SIMULATION LAYER                                         |
+|   [ Wokwi ESP32 Cloud Twin ]                [ Software Scenario Simulator ]          [ Physical ESP32 Edge HW ]  |
+|   (2x DHT22, 2x Sonar, 2x Pots)             (7 Deterministic Fault Scenarios)        (Microcontroller & Sensors) |
++───────────────────────┬───────────────────────────────────┬──────────────────────────────────────┬───────────────+
+                        │ MQTT (QoS 1)                      │ MQTT (QoS 1)                         │ HTTP Failover
+                        ▼                                   ▼                                      │
++───────────────────────────────────────────────────+                                              │
+|                INGESTION BROKER                   |                                              │
+|   Mosquitto v2 (Local) / HiveMQ Cloud (Sandbox)   |                                              │
+|   Topic: dcim/{site}/{hall}/{device}/telemetry    |                                              │
++───────────────────────┬───────────────────────────+                                              │
+                        │ MQTT Subscribe                                                           │
+                        ▼                                                                          │
++──────────────────────────────────────────────────────────────────────────────────────────────────┼───────────────+
+|                                    INGEST & TWIN ENGINE (apps/ingest)                            ▼               |
+|  ┌────────────────────────────────────────────────┐     ┌─────────────────────────────────────────────────────┐  |
+|  │            Ingress Gateway & Auth              │     │                  HTTP Ingest API                    │  |
+|  │  - MQTT Client (mqtt.js)                       │     │  - POST /api/v1/ingest                              │  |
+|  │  - Timing-Safe SHA-256 API Key Verification    │◄────┤  - Header: X-Device-Key                             │  |
+|  │  - Rate Limiting & Packet Sanitization         │     │  - Clock-drift Sanity Normalization (±5 min)        │  |
+|  └───────────────────────┬────────────────────────┘     └─────────────────────────────────────────────────────┘  |
+|                          │ Validated Telemetry Packet                                                            |
+|                          ▼                                                                                       |
+|  ┌────────────────────────────────────────────────┐     ┌─────────────────────────────────────────────────────┐  |
+|  │           Physics Derivation Engine            │     │                Dynamic PUE Model                    │  |
+|  │  - Ultrasonic cm -> Tank Fill % & Litres       │────>│  - Dynamic Chiller Lift & COP Curve                 │  |
+|  │  - Thermal Differential (Delta-T = Thot - Tcold)│     │  - Double-Conversion UPS Efficiency Loss (η = 94%)  │  |
+|  │  - Fuel Burn Rate & Generator Runtime Hours    │     │  - Rolling PUE FIFO Moving Window                   │  |
+|  └───────────────────────┬────────────────────────┘     └──────────────────────────┬──────────────────────────┘  |
+|                          │                                                         │                             |
+|                          ▼                                                         ▼                             |
+|  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  |
+|  │                                      Rule Engine & State Machine                                           │  |
+|  │  - Multi-Threshold Comparator (Warn / Critical)                                                            │  |
+|  │  - Debounce Window (for_seconds Breach Hold) & Deadband Hysteresis Recovery                                │  |
+|  │  - Compound CDU Leak Detector (dP/dt Negative Gradient + dLevel/dt Fluid Drop)                             │  |
+|  │  - Device Staleness Watchdog (3x Warning / 10x Critical Heartbeat Timeout)                                 │  |
+|  └───────────────────────┬─────────────────────────────────────────────────────────┬──────────────────────────┘  |
+|                          │ Trigger Escalation Event                                │ Broadcast Event             |
+|                          ▼                                                         ▼                             |
+|  ┌────────────────────────────────────────────────┐     ┌─────────────────────────────────────────────────────┐  |
+|  │            Escalation Policy Runner            │     │                 Real-Time SSE Hub                   │  |
+|  │  - Tier 1: Immediate (0s) -> On-Call Slack/SMS │     │  - GET /api/v1/stream                               │  |
+|  │  - Tier 2: +5 min Unacked -> Duty Manager      │     │  - Broadcasts: telemetry, pue, alerts, health       │  |
+|  │  - Tier 3: +15 min Unacked -> Incident Bridge  │     │  - Heartbeat & Automatic Reconnect Keep-Alive       │  |
+|  │  - Outbound HMAC-SHA256 Request Signing        │     │                                                     │  |
+|  └───────────────────────┬────────────────────────┘     └──────────────────────────┬──────────────────────────┘  |
++──────────────────────────┼─────────────────────────────────────────────────────────┼─────────────────────────────+
+                           │ Audit Log & Persistence                                 │ Server-Sent Events (SSE)
+                           ▼                                                         ▼
++───────────────────────────────────────────────────+     +─────────────────────────────────────────────────────+
+|               POSTGRESQL 16 DATABASE              |     |               NOC DASHBOARD (apps/web)              |
+|  - Raw & Derived Readings (Time-bucketed queries)  |     |  Next.js 14 App Router, Dark NOC Theme, Recharts    |
+|  - Alert State (Firing / Acknowledged / Resolved) |     |  - Overview (Radial PUE Gauge & 1h Trendline)       |
+|  - Partial Unique Deduplication Index             |     |  - Hall View (12-Rack Thermal & Power Heatmap)      |
+|  - Webhook Delivery Attempts & Audit History      |     |  - Cooling (CDU Tank Graphic & Pressure Chart)      |
+|  - Asset Geometry & Alert Threshold Configuration |     |  - Power (Diesel Tank, Genset, PUE Breakdown)       |
+|  - Pure UTC Storage (Africa/Nairobi Presentation) |     |  - Alerts, Devices, Settings & Scenario Control     |
++───────────────────────────────────────────────────+     +─────────────────────────────────────────────────────+
+```
+
+---
+
+### 1.2 Architectural Layers & Component Responsibilities
+
+The ColdAisle codebase is partitioned into five distinct operational tiers:
+
+| Tier | Component | Primary Responsibility | Protocols & Invariants |
+|---|---|---|---|
+| **1. Physical Edge & Simulation** | `/firmware`<br>`/sim` | Samples physical environmental sensors; executes failover; simulates facilities fault profiles | MQTT (QoS 1), HTTP POST failover; 5 s cadence; Wokwi cloud & hardware compatible |
+| **2. Transport & Security** | `apps/ingest` | Terminates broker streams; verifies device authenticity; sanitizes timestamp drift | Timing-safe HMAC SHA-256; drift clamp to $\pm 300\text{ s}$; rate-limited ingress |
+| **3. Thermodynamic Twin Engine** | `apps/ingest/src/engine` | Converts raw distance/voltage into facility metric twins; calculates dynamic facility PUE | Ultrasonic headspace $\rightarrow$ geometry volume; dynamic Chiller COP; $\eta_{\text{UPS}} = 94\%$ |
+| **4. Operational Intelligence & Escalation** | `apps/ingest/src/engine`<br>`apps/ingest/src/escalation` | Evaluates debounced rules; flags compound leaks; manages alert state; dispatches signed webhooks | Debounce hold (`for_seconds`); hysteresis deadband; HMAC-SHA256 signature; exponential retry |
+| **5. Storage & NOC Presentation** | `db`<br>`apps/web` | Persists time-bucketed readings; renders NOC dark dashboard; streams live metrics to operators | PostgreSQL 16 (UTC); Server-Sent Events (SSE); Next.js 14; Africa/Nairobi (EAT) display |
+
+---
+
+### 1.3 End-to-End Telemetry Pipeline
+
 ```mermaid
-flowchart TD
-    subgraph EdgeLayer ["Physical Edge & Simulation Layer"]
-        ESP32["ESP32 Physical Twin (Wokwi / Hardware)\n2x DHT22, 2x HC-SR04, 2x Pots"]
-        NodeSim["Scenario Simulator (sim/cli)\n7 Injected Failure Profiles"]
+sequenceDiagram
+    autonumber
+    participant Sensor as ESP32 / Simulator
+    participant Broker as Mosquitto / Ingest
+    participant Engine as Twin & Rule Engine
+    participant DB as PostgreSQL 16
+    participant Webhook as Alert Escalation
+    participant NOC as Next.js NOC Dashboard
+
+    Sensor->>Broker: Publish JSON Telemetry (MQTT QoS 1 / HTTP POST)
+    Broker->>Broker: Verify API Key & Sanitize UTC Clock Drift
+    Broker->>Engine: Forward Validated Telemetry Packet
+    Engine->>Engine: Derive Tank Litres, Delta-T, Burn Rate, and PUE
+    Engine->>DB: Persist Raw & Derived Readings
+    Engine->>Engine: Evaluate Debounce Timers & Compound Rules
+    alt Alert Threshold Breached (Debounce Satisfied)
+        Engine->>DB: Open Alert (State: FIRING, Partial Unique Index)
+        Engine->>Webhook: Dispatch Tier 1 Webhook (HMAC-SHA256 Signed)
+        Webhook-->>DB: Log Delivery Audit (Latency, Status Code)
     end
+    Engine->>NOC: Broadcast SSE Event (telemetry, pue, alerts)
+    NOC->>NOC: Update PUE Gauge, Heatmap, Tank Levels (EAT Timezone)
+```
 
-    subgraph TransportLayer ["Ingestion & Broker Layer"]
-        Mosquitto["Mosquitto MQTT Broker (Port 1883 / 9001)\nTopic: dcim/{site}/{hall}/{device}/telemetry"]
-        HttpIngest["HTTP Ingest API (Port 4000)\nPOST /api/v1/ingest\nHeader: X-Device-Key"]
-    end
+---
 
-    subgraph CoreBackend ["ColdAisle Ingest & Engine (apps/ingest)"]
-        Validator["Zod Telemetry Validator\nClock Drift Sanity Fallback (±5 min)"]
-        Derivation["Physics Derivation Engine\nTank Geometry, Delta-T, Burn Rates"]
-        PueModel["Dynamic PUE Model\nChiller Work COP, UPS Loss, Aux"]
-        RuleEngine["Alert Engine\nDebouncing, Hysteresis, Deduplication"]
-        EscalationEngine["Escalation Policy Runner\nTier 1 (0s) -> Tier 2 (5m) -> Tier 3 (15m)\nHMAC-SHA256 Signed Webhooks"]
-        SseHub["SSE Streaming Hub\nBroadcast to Clients (Port 4000)"]
-    end
+### 1.4 Monorepo Workspace Organization
 
-    subgraph DataLayer ["Persistence (PostgreSQL 16)"]
-        Postgres[(PostgreSQL 16)\nTime-bucketed queries, partial unique index\nUTC timestamps (Africa/Nairobi display)]
-    end
-
-    subgraph PresentationLayer ["NOC Web Dashboard (apps/web)"]
-        NextDashboard["Next.js 14 App Router (Port 3000)\nDark NOC Theme, High-Contrast KPIs\nOverview, Hall Heatmap, Cooling, Power, Alerts, Devices, Settings, Scenario Control"]
-    end
-
-    ESP32 -->|MQTT QoS 1| Mosquitto
-    ESP32 -.->|HTTP Failover| HttpIngest
-    NodeSim -->|MQTT QoS 1| Mosquitto
-    NodeSim -.->|HTTP POST| HttpIngest
-
-    Mosquitto --> Validator
-    HttpIngest --> Validator
-    Validator --> Derivation
-    Derivation --> PueModel
-    PueModel --> RuleEngine
-    RuleEngine --> EscalationEngine
-    RuleEngine --> Postgres
-    PueModel --> Postgres
-    RuleEngine --> SseHub
-    SseHub -->|Server-Sent Events| NextDashboard
+```
+coldaisle/
+├── apps/
+│   ├── web/                    # Next.js 14+ App Router NOC dashboard (Port 3000)
+│   │   ├── src/app/            # 8 dedicated NOC routes (Overview, Hall, Cooling, Power, Alerts, Devices, Settings, Scenario)
+│   │   ├── src/components/     # NOC dark theme widgets, radial gauges, and heatmaps
+│   │   ├── src/context/        # RBAC security context (Admin Operator vs Read-Only Viewer)
+│   │   └── src/hooks/          # useSSE real-time streaming hook with auto-reconnect
+│   └── ingest/                 # Node.js 20+ Ingest & Twin Engine (Port 4000)
+│       ├── src/engine/         # Physical derivation, dynamic PUE model, debounce, hysteresis, and compound rules
+│       ├── src/escalation/     # HMAC-SHA256 signer, multi-tier policy runner, retry loop, and format adapters
+│       ├── src/http/           # HTTP ingestion routes, alerts API, mock on-call sink, and SSE endpoint
+│       ├── src/mqtt/           # Resilient MQTT client, topic dispatcher, and auto-recovery
+│       └── tests/              # 37 Vitest unit tests covering rules, PUE, firmware, and webhooks
+├── sim/                        # Standalone facility scenario simulator
+│   ├── src/scenarios/          # 7 failure models (thermal spike, CDU leak, power cut, fuel depletion, etc.)
+│   └── src/cli.ts              # Interactive CLI simulator runner with hotkey scenario switching
+├── firmware/                   # ESP32 physical twin for Wokwi and DevKit hardware
+│   ├── sketch.ino              # Arduino C++ application (WiFi, SNTP, PubSubClient, ArduinoJson, HTTP failover)
+│   ├── diagram.json            # Wokwi canvas schematic with 2x DHT22, 2x HC-SR04, and 2x Potentiometers
+│   └── libraries.txt           # Pinned dependencies for Wokwi compiler
+├── db/                         # Database migrations and seed datasets
+│   ├── migrations/             # Idempotent DDL schema (10 tables, time-series indexes, partial unique index)
+│   └── seed/                   # Nairobi DC1 (Sameer Africa) campus topology, halls, racks, and default policies
+├── docs/                       # Engineering specifications & runbooks
+│   ├── architecture.md         # Deep-dive system architecture specification
+│   ├── pue-model.md            # Mathematical formulation of facility PUE and chiller COP lift
+│   ├── runbook.md              # Standard Operating Procedures (SOP) for on-call engineers
+│   ├── demo-script.md          # 3-minute executive walkthrough script for Kenya DC operators
+│   └── deploy-guide.md         # 100% free-tier cloud deployment guide (Neon + Render + Vercel)
+├── docker-compose.yml          # Local infra orchestration (PostgreSQL 16 & Mosquitto 2 broker)
+├── .env.example                # Documented configuration template
+└── README.md                   # Project master overview
 ```
 
 ---
