@@ -14,7 +14,11 @@ import {
   Settings,
   Flame,
   Radio,
+  ShieldAlert,
+  ShieldCheck,
+  Eye,
 } from 'lucide-react';
+import { useAuthRole } from '../context/AuthRoleContext';
 
 interface NavbarProps {
   sseStatus?: 'connecting' | 'connected' | 'disconnected';
@@ -24,6 +28,7 @@ interface NavbarProps {
 export function Navbar({ sseStatus = 'connected', activeAlertCount = 0 }: NavbarProps) {
   const pathname = usePathname();
   const [currentTime, setCurrentTime] = useState<string>('');
+  const { role, setRole, isAdmin } = useAuthRole();
 
   useEffect(() => {
     setCurrentTime(formatEAT(new Date()));
@@ -81,6 +86,29 @@ export function Navbar({ sseStatus = 'connected', activeAlertCount = 0 }: Navbar
               {sseStatus === 'connected' ? 'LIVE SSE' : sseStatus.toUpperCase()}
             </span>
           </div>
+
+          {/* RBAC Role Selector */}
+          <button
+            onClick={() => setRole(isAdmin ? 'viewer' : 'admin')}
+            title={`Active role: ${role.toUpperCase()}. Click to switch to ${isAdmin ? 'VIEWER (Read-Only)' : 'ADMIN (Operator)'}`}
+            className={`flex items-center gap-1.5 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+              isAdmin
+                ? 'border-cyan-500/40 bg-cyan-950/30 text-cyan-300 hover:bg-cyan-900/40'
+                : 'border-slate-700 bg-slate-900/80 text-slate-400 hover:bg-slate-800'
+            }`}
+          >
+            {isAdmin ? (
+              <>
+                <ShieldCheck className="h-3 w-3 text-cyan-400" />
+                <span>ROLE: ADMIN</span>
+              </>
+            ) : (
+              <>
+                <Eye className="h-3 w-3 text-slate-400" />
+                <span>ROLE: VIEWER</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 

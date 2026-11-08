@@ -11,7 +11,9 @@ import {
   RefreshCw,
   AlertTriangle,
   Play,
+  Lock,
 } from 'lucide-react';
+import { useAuthRole } from '../../context/AuthRoleContext';
 
 interface ScenarioMeta {
   id: string;
@@ -121,6 +123,7 @@ export default function ScenarioControlPage() {
   const [activeScenario, setActiveScenario] = useState<string>('normal');
   const [loading, setLoading] = useState(false);
   const [lastInjected, setLastInjected] = useState<string | null>(null);
+  const { isAdmin } = useAuthRole();
 
   const ingestUrl = process.env.NEXT_PUBLIC_INGEST_URL || 'http://localhost:4000';
 
@@ -231,16 +234,28 @@ export default function ScenarioControlPage() {
 
               <div className="mt-5 pt-3 border-t border-slate-800/60">
                 <button
-                  disabled={loading || isActive}
+                  disabled={loading || isActive || !isAdmin}
                   onClick={() => handleInject(sc.id)}
+                  title={!isAdmin ? 'Admin role required to trigger fault injection profiles' : undefined}
                   className={`w-full flex items-center justify-center gap-2 rounded px-4 py-2 font-mono text-xs font-bold transition-all ${
-                    isActive
+                    !isAdmin
+                      ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                      : isActive
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                       : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400 shadow-md'
                   }`}
                 >
-                  <Play className="h-3.5 w-3.5 fill-current" />
-                  <span>{isActive ? 'CURRENT PROFILE RUNNING' : `INJECT [${sc.id.toUpperCase()}]`}</span>
+                  {!isAdmin ? (
+                    <>
+                      <Lock className="h-3.5 w-3.5 text-slate-600" />
+                      <span>ADMIN REQUIRED</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-3.5 w-3.5 fill-current" />
+                      <span>{isActive ? 'CURRENT PROFILE RUNNING' : `INJECT [${sc.id.toUpperCase()}]`}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

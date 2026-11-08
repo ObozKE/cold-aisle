@@ -14,9 +14,11 @@ import {
   FileText,
   Filter,
 } from 'lucide-react';
+import { useAuthRole } from '../../context/AuthRoleContext';
 
 export default function AlertsPage() {
   const { latestAlert } = useSSE();
+  const { isAdmin } = useAuthRole();
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterState, setFilterState] = useState<string>('all');
@@ -268,10 +270,16 @@ export default function AlertsPage() {
                         <div className="flex items-center justify-end gap-2">
                           {isFiring && (
                             <button
+                              disabled={!isAdmin}
                               onClick={() => setSelectedAlertForAck(alert)}
-                              className="rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20"
+                              title={isAdmin ? 'Acknowledge alert' : 'Admin role required to acknowledge alerts (Current: Viewer)'}
+                              className={`rounded border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                isAdmin
+                                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                                  : 'border-slate-800 bg-slate-900 text-slate-600 cursor-not-allowed opacity-60'
+                              }`}
                             >
-                              Ack
+                              {isAdmin ? 'Ack' : 'Ack (Locked)'}
                             </button>
                           )}
 

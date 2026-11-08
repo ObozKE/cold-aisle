@@ -11,8 +11,10 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { useAuthRole } from '../../context/AuthRoleContext';
 
 export default function SettingsPage() {
+  const { isAdmin } = useAuthRole();
   const [rules, setRules] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
   const [endpoints, setEndpoints] = useState<any[]>([]);
@@ -164,15 +166,22 @@ export default function SettingsPage() {
                   <td className="py-2.5 px-3 text-right">
                     <button
                       onClick={() => handleSaveRule(rule)}
-                      disabled={savingRuleId === rule.id}
-                      className="inline-flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-slate-700 disabled:opacity-50"
+                      disabled={savingRuleId === rule.id || !isAdmin}
+                      title={!isAdmin ? 'Admin role required to save threshold settings' : undefined}
+                      className={`inline-flex items-center gap-1 rounded px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                        !isAdmin
+                          ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed opacity-60'
+                          : 'bg-slate-800 text-cyan-300 hover:bg-slate-700 disabled:opacity-50'
+                      }`}
                     >
-                      {saveSuccess === rule.id ? (
+                      {!isAdmin ? (
+                        <Lock className="h-3.5 w-3.5 text-slate-600" />
+                      ) : saveSuccess === rule.id ? (
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                       ) : (
                         <Save className="h-3.5 w-3.5" />
                       )}
-                      <span>{savingRuleId === rule.id ? '...' : saveSuccess === rule.id ? 'Saved' : 'Save'}</span>
+                      <span>{!isAdmin ? 'Locked' : savingRuleId === rule.id ? '...' : saveSuccess === rule.id ? 'Saved' : 'Save'}</span>
                     </button>
                   </td>
                 </tr>
