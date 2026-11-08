@@ -3,9 +3,10 @@ import { testDbConnection } from './db/pool.js';
 import { createHttpServer } from './http/server.js';
 import { startMqttSubscriber } from './mqtt/subscriber.js';
 import { startStaleDetector, stopStaleDetector } from './engine/stale.js';
+import { initEscalationPolicyRunner } from './escalation/policyRunner.js';
 
 async function main() {
-  console.log('🚀 [ColdAisle Ingest] Initializing Telemetry Ingest & Rule Engine...');
+  console.log('🚀 [ColdAisle Ingest] Initializing Telemetry Ingest & Escalation Engine...');
 
   // 1. Verify Database
   const dbOk = await testDbConnection();
@@ -18,8 +19,10 @@ async function main() {
   const app = createHttpServer();
   const server = app.listen(config.PORT, () => {
     console.log(`🌐 [HTTP Server] Listening on http://localhost:${config.PORT}`);
-    console.log(`   • Ingest Endpoint: POST http://localhost:${config.PORT}/api/v1/ingest`);
-    console.log(`   • Health Probe:    GET  http://localhost:${config.PORT}/health`);
+    console.log(`   • Ingest Endpoint:    POST http://localhost:${config.PORT}/api/v1/ingest`);
+    console.log(`   • Alerts Endpoint:    GET  http://localhost:${config.PORT}/api/v1/alerts`);
+    console.log(`   • Mock On-Call Sink:  POST http://localhost:${config.PORT}/api/mock-oncall`);
+    console.log(`   • Health Probe:       GET  http://localhost:${config.PORT}/health`);
   });
 
   // 3. Start MQTT Subscriber
@@ -27,6 +30,13 @@ async function main() {
 
   // 4. Start Background Device Stale Detector
   const staleTimer = startStaleDetector(config.STALE_CHECK_INTERVAL_MS);
+
+  // 5. Initialize Escalation Policy Runner
+  // Check if acceleration is enabled for demo/testing (e.g. 50x turns 5m -> 6s, 15m -> 18s)
+  const acceleration = process.env.ESCALATION_ACCELERATION
+    ? parseFloat(process.env.ESCALATION_ACCELERATION)
+    : 1.0;
+  initEscalationPolicyRunner(acceleration);
 
   // Graceful shutdown handling
   const shutdown = async (signal: string) => {

@@ -328,7 +328,7 @@ VALUES
 (
     '44444444-4444-4444-4444-444444444401',
     'Local NOC Mock On-Call Sink',
-    'http://localhost:3000/api/mock-oncall',
+    'http://localhost:4000/api/mock-oncall',
     'coldaisle_default_hmac_secret_4421',
     'generic',
     true
@@ -336,7 +336,7 @@ VALUES
 (
     '44444444-4444-4444-4444-444444444402',
     'Slack Escalation NOC Channel',
-    'http://localhost:3000/api/mock-oncall?sink=slack',
+    'http://localhost:4000/api/mock-oncall?sink=slack',
     'coldaisle_default_hmac_secret_4421',
     'slack',
     true

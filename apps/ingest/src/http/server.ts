@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { ingestRouter } from './routes/ingest.js';
+import { alertsRouter } from './routes/alerts.js';
+import { mockOncallRouter } from './routes/mockOncall.js';
 import { pool } from '../db/pool.js';
 
 export function createHttpServer() {
@@ -27,8 +29,13 @@ export function createHttpServer() {
     }
   });
 
+  // Mock On-Call Receiver endpoint (both /api/mock-oncall and root /mock-oncall)
+  app.use('/api', mockOncallRouter);
+  app.use(mockOncallRouter);
+
   // REST API v1
   app.use('/api/v1', ingestRouter);
+  app.use('/api/v1', alertsRouter);
 
   return app;
 }
