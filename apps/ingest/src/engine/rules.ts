@@ -39,6 +39,11 @@ export class RuleEngine {
   private rulesCache: AlertRuleRecord[] = [];
   private rulesCacheExpiresAt = 0;
 
+  // Active alerts cache: dedupeKey -> ActiveAlertRecord (eliminates 9 DB round-trips per packet)
+  private activeAlertsCache = new Map<string, ActiveAlertRecord>();
+  private activeAlertsInitialized = false;
+  private lastAlertsSync = 0;
+
   // Debounce tracking: dedupeKey -> first breach timestamp (ms)
   private debounceBreachTimestamps = new Map<string, number>();
 
@@ -48,6 +53,32 @@ export class RuleEngine {
     string,
     Array<{ ts: number; level_pct: number; pressure_bar: number }>
   >();
+
+  /**
+   * Fast in-memory sync for active alerts (runs once at startup or every 15s)
+   */
+  public async syncActiveAlerts(): Promise<void> {
+    const res = await pool.query<ActiveAlertRecord>(
+      `SELECT * FROM alerts WHERE state != 'resolved'`
+    );
+    this.activeAlertsCache.clear();
+    for (const alert of res.rows) {
+      this.activeAlertsCache.set(alert.dedupe_key, alert);
+    }
+    this.activeAlertsInitialized = true;
+    this.lastAlertsSync = Date.now();
+  }
+
+  /**
+   * Invalidate or update active alert in cache when acked or modified externally
+   */
+  public invalidateActiveAlert(dedupeKey?: string): void {
+    if (dedupeKey) {
+      this.activeAlertsCache.delete(dedupeKey);
+    } else {
+      this.activeAlertsInitialized = false;
+    }
+  }
 
   /**
    * Refreshes rules from DB with 60s cache TTL
@@ -172,6 +203,11 @@ export class RuleEngine {
     };
 
     const now = Date.now();
+
+    // Fast batch sync of active alerts if stale (removes 9 sequential DB queries per packet)
+    if (!this.activeAlertsInitialized || now - this.lastAlertsSync > 15000) {
+      await this.syncActiveAlerts();
+    }
 
     for (const rule of rules) {
       const metricData = metrics[rule.metric];
@@ -319,14 +355,13 @@ export class RuleEngine {
   }
 
   /**
-   * Look up active (firing or acknowledged) alert by dedupe key
+   * Look up active (firing or acknowledged) alert by dedupe key (fast O(1) in-memory cache)
    */
   public async getActiveAlert(dedupeKey: string): Promise<ActiveAlertRecord | null> {
-    const res = await pool.query<ActiveAlertRecord>(
-      `SELECT * FROM alerts WHERE dedupe_key = $1 AND state != 'resolved' LIMIT 1`,
-      [dedupeKey]
-    );
-    return res.rows.length > 0 ? res.rows[0] : null;
+    if (!this.activeAlertsInitialized || Date.now() - this.lastAlertsSync > 15000) {
+      await this.syncActiveAlerts();
+    }
+    return this.activeAlertsCache.get(dedupeKey) || null;
   }
 
   /**
@@ -359,6 +394,8 @@ export class RuleEngine {
     );
 
     const created = res.rows[0];
+    this.activeAlertsCache.set(dedupeKey, created);
+
     console.log(
       `🚨 [ALERT FIRING] [${severity.toUpperCase()}] ${created.subject} (Metric: ${rule.metric}=${value})`
     );
@@ -390,9 +427,16 @@ export class RuleEngine {
       [value, newSeverity, alert.id]
     );
 
+    const updated: ActiveAlertRecord = {
+      ...alert,
+      severity: newSeverity,
+      last_value: value,
+    };
+    this.activeAlertsCache.set(alert.dedupe_key, updated);
+
     if (escalated) {
       console.log(`⚠️ [ALERT ESCALATED] ${alert.subject} -> CRITICAL (Value: ${value})`);
-      alertEventEmitter.emit('alert:escalated', { ...alert, severity: newSeverity, last_value: value });
+      alertEventEmitter.emit('alert:escalated', updated);
     }
   }
 
@@ -407,6 +451,8 @@ export class RuleEngine {
        RETURNING *`,
       [value, alert.id]
     );
+
+    this.activeAlertsCache.delete(alert.dedupe_key);
 
     const resolved = res.rows[0];
     console.log(`✅ [ALERT RESOLVED] ${resolved.subject} (Cleared at: ${value})`);

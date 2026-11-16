@@ -347,6 +347,26 @@ export default function AlertsPage() {
                   className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-slate-200 focus:border-cyan-500 focus:outline-none"
                 />
               </div>
+
+              {/* Quick SOP Note Templates */}
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                <span className="text-[10px] text-slate-500 w-full">Quick SOP Triage Templates:</span>
+                {[
+                  'Dispatched technician with containment kit',
+                  'Secondary CDU loop bypass engaged',
+                  'CRAH thermal override active',
+                  'Fuel replenishment SLA dispatched',
+                ].map((template) => (
+                  <button
+                    key={template}
+                    type="button"
+                    onClick={() => setAckNote(template)}
+                    className="rounded bg-slate-800/80 hover:bg-slate-700/80 text-[10px] text-cyan-300 px-2 py-1 border border-slate-700 transition-colors"
+                  >
+                    + {template}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="mt-5 flex justify-end gap-2">

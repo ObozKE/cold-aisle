@@ -34,6 +34,20 @@ export interface ProcessedTelemetryEvent {
   pue?: PueCalculationResult;
 }
 
+export interface LatestTelemetrySummary {
+  device: DeviceMetadata;
+  ts: Date;
+  readings: Record<string, number>;
+  derived: ProcessedTelemetryEvent['derived'];
+  pue: PueCalculationResult;
+}
+
+let latestTelemetrySummary: LatestTelemetrySummary | null = null;
+
+export function getLatestTelemetrySummary(): LatestTelemetrySummary | null {
+  return latestTelemetrySummary;
+}
+
 export const telemetryEventEmitter = new EventEmitter();
 
 // Default fallback geometry in case DB asset record is missing
@@ -111,8 +125,7 @@ async function getAssetConfigs(): Promise<{
 /**
  * Core Ingestion Pipeline:
  * Validates, authenticates, derives physics, calculates PUE, evaluates alert rules,
- * and stores time-series readings.
- */
+ * and stores   the telemetry data in PostgreSql
 export async function processTelemetry(
   rawInput: unknown,
   source: 'mqtt' | 'http' = 'mqtt'
@@ -253,6 +266,31 @@ export async function processTelemetry(
     device,
     ts,
     raw: validated.readings,
+    derived,
+    pue: pueResult,
+  };
+
+  // Cache latest state in memory for sub-millisecond API responses
+  latestTelemetrySummary = {
+    device,
+    ts,
+    readings: {
+      cold_aisle_temp_c: validated.readings.cold_aisle_temp_c,
+      cold_aisle_rh: validated.readings.cold_aisle_rh,
+      hot_aisle_temp_c: validated.readings.hot_aisle_temp_c,
+      hot_aisle_rh: validated.readings.hot_aisle_rh,
+      coolant_pressure_bar: validated.readings.coolant_pressure_bar,
+      cdu_reservoir_distance_cm: validated.readings.cdu_reservoir_distance_cm,
+      diesel_distance_cm: validated.readings.diesel_distance_cm,
+      rack_it_kw: validated.readings.rack_it_kw,
+      cdu_reservoir_level_pct: derived.cdu_reservoir_level_pct,
+      cdu_reservoir_litres: derived.cdu_reservoir_litres,
+      diesel_level_pct: derived.diesel_level_pct,
+      diesel_litres: derived.diesel_litres,
+      diesel_runtime_hours: derived.diesel_runtime_hours,
+      diesel_burn_rate_lph: derived.diesel_burn_rate_lph,
+      aisle_delta_t_c: derived.aisle_delta_t_c,
+    },
     derived,
     pue: pueResult,
   };

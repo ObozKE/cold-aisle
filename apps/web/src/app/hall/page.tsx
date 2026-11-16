@@ -11,6 +11,7 @@ import {
   Flame,
   CheckCircle,
   AlertTriangle,
+  Server,
 } from 'lucide-react';
 
 export default function HallViewPage() {
@@ -48,11 +49,11 @@ export default function HallViewPage() {
 
   // Helper for thermal heatmap color
   const getThermalClass = (temp: number) => {
-    if (temp > 32) return 'border-rose-500 bg-rose-950/40 text-rose-300 shadow-[0_0_12px_rgba(239,68,68,0.2)]';
-    if (temp > 27) return 'border-amber-500 bg-amber-950/30 text-amber-300';
-    if (temp > 25) return 'border-emerald-600/50 bg-emerald-950/20 text-emerald-200';
-    if (temp >= 18) return 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300';
-    return 'border-cyan-500/40 bg-cyan-950/30 text-cyan-300';
+    if (temp > 32) return 'border-rose-500/80 bg-gradient-to-b from-slate-900/90 to-rose-950/40 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)] ring-1 ring-rose-500/50';
+    if (temp > 27) return 'border-amber-500/60 bg-gradient-to-b from-slate-900/90 to-amber-950/30 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.2)]';
+    if (temp > 25) return 'border-emerald-600/50 bg-gradient-to-b from-slate-900/90 to-emerald-950/20 text-emerald-200';
+    if (temp >= 18) return 'border-emerald-500/40 bg-gradient-to-b from-slate-900/90 to-emerald-950/25 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.1)]';
+    return 'border-cyan-500/40 bg-gradient-to-b from-slate-900/90 to-cyan-950/25 text-cyan-300';
   };
 
   const avgInlet = liveColdTemp ?? 22.4;
@@ -62,22 +63,25 @@ export default function HallViewPage() {
   return (
     <div className="space-y-6">
       {/* Header & Hall Selector */}
-      <div className="flex flex-col justify-between gap-4 rounded-lg border border-noc-border bg-noc-panel p-4 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-lg md:flex-row md:items-center">
         <div>
-          <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
-            DATA HALL THERMAL HEATMAP & AIRFLOW
-          </h1>
-          <p className="text-xs text-slate-400">
-            Per-rack thermal containment monitoring • ASHRAE TC 9.9 thermal envelopes
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+            <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
+              DATA HALL THERMAL HEATMAP & AIRFLOW
+            </h1>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Per-rack thermal containment monitoring • ASHRAE TC 9.9 recommended envelope (18°C – 27°C)
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/60 p-1 font-mono text-xs">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 p-1 font-mono text-xs shadow-md">
           <button
             onClick={() => setSelectedHall('hall-alpha')}
-            className={`rounded px-3 py-1 font-semibold transition-colors ${
+            className={`rounded-md px-3.5 py-1.5 font-bold transition-all ${
               selectedHall === 'hall-alpha'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                ? 'bg-cyan-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -85,9 +89,9 @@ export default function HallViewPage() {
           </button>
           <button
             onClick={() => setSelectedHall('hall-beta')}
-            className={`rounded px-3 py-1 font-semibold transition-colors ${
+            className={`rounded-md px-3.5 py-1.5 font-bold transition-all ${
               selectedHall === 'hall-beta'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                ? 'bg-cyan-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -103,6 +107,7 @@ export default function HallViewPage() {
           value={avgInlet.toFixed(1)}
           unit="°C"
           subValue="ASHRAE Recommended Envelope"
+          benchmark="Max: 27.0°C"
           status={avgInlet > 32 ? 'critical' : avgInlet > 27 ? 'warn' : 'normal'}
           icon={<Thermometer className="h-4 w-4" />}
         />
@@ -111,7 +116,8 @@ export default function HallViewPage() {
           title="Exhaust Hot Aisle"
           value={avgExhaust.toFixed(1)}
           unit="°C"
-          subValue="CRAH Return Air Flow"
+          subValue="CRAH Return Plenum"
+          benchmark="Nominal: 35.0°C"
           status={avgExhaust > 48 ? 'critical' : avgExhaust > 40 ? 'warn' : 'normal'}
           icon={<Flame className="h-4 w-4" />}
         />
@@ -121,6 +127,7 @@ export default function HallViewPage() {
           value={deltaT.toFixed(1)}
           unit="°C"
           subValue="Target Delta: 10 - 14 °C"
+          benchmark="Crit: > 20.0°C"
           status={deltaT > 20 ? 'critical' : deltaT > 15 ? 'warn' : 'normal'}
           icon={<ArrowRightLeft className="h-4 w-4" />}
         />
@@ -130,39 +137,40 @@ export default function HallViewPage() {
           value={(filteredRacks.reduce((acc, r) => acc + (r.active_kw || 7.8), 0)).toFixed(1)}
           unit="kW"
           subValue="Across 6 Enclosed Server Racks"
+          benchmark="Rated: 90.0 kW"
           status="neutral"
           icon={<Zap className="h-4 w-4" />}
         />
       </div>
 
       {/* Rack Grid Heatmap */}
-      <div className="rounded-lg border border-noc-border bg-noc-panel p-5">
-        <div className="flex items-center justify-between pb-4">
+      <div className="rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800/80 gap-3">
           <div className="flex items-center gap-2">
             <Layers className="h-4 w-4 text-cyan-400" />
             <h2 className="font-mono text-sm font-bold tracking-tight text-slate-100 uppercase">
-              {selectedHall === 'hall-alpha' ? 'Row A (Racks A01 - A06)' : 'Row B (Racks B01 - B06)'}
+              {selectedHall === 'hall-alpha' ? 'Row A Containment Corridor (Racks A01 - A06)' : 'Row B Containment Corridor (Racks B01 - B06)'}
             </h2>
           </div>
 
           {/* Thermal Legend */}
-          <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded bg-cyan-500" /> &lt;22°C (Cool)
+          <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(56,189,248,0.8)]" /> &lt;22°C (Cool)
             </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded bg-emerald-500" /> 22-25°C (Optimal)
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" /> 22-25°C (Optimal)
             </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded bg-amber-500" /> &gt;27°C (Warn)
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.8)]" /> &gt;27°C (Warn)
             </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded bg-rose-500" /> &gt;32°C (Critical)
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] animate-pulse" /> &gt;32°C (Critical)
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {filteredRacks.map((rack, idx) => {
             const inlet = liveColdTemp ? Number((liveColdTemp + ((idx % 3) - 1) * 0.4).toFixed(1)) : rack.inlet_temp_c;
             const exhaust = liveHotTemp ? Number((liveHotTemp + ((idx % 3) - 1) * 0.5).toFixed(1)) : rack.exhaust_temp_c;
@@ -173,39 +181,42 @@ export default function HallViewPage() {
             return (
               <div
                 key={rack.id}
-                className={`flex flex-col justify-between rounded-lg border p-4 transition-all ${getThermalClass(
+                className={`flex flex-col justify-between rounded-xl border p-4.5 transition-all duration-300 hover:-translate-y-1 ${getThermalClass(
                   inlet
                 )}`}
               >
                 <div>
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                    <span className="font-mono text-sm font-bold tracking-wider text-slate-100">
-                      {rack.label}
-                    </span>
-                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-300">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <Server className="h-4 w-4 text-cyan-400 opacity-80" />
+                      <span className="font-mono text-sm font-black tracking-wider text-slate-100">
+                        {rack.label}
+                      </span>
+                    </div>
+                    <span className="rounded bg-slate-800/80 border border-slate-700/60 px-1.5 py-0.5 text-[9px] font-mono text-slate-300">
                       42U
                     </span>
                   </div>
 
                   {/* Inlet Temp Heatmap Display */}
                   <div className="mt-3 flex items-baseline justify-between">
-                    <span className="text-[11px] uppercase tracking-wider text-slate-400 font-mono">
-                      Inlet:
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono font-bold">
+                      INLET TEMP:
                     </span>
-                    <span className="font-mono text-2xl font-bold tabular-nums">
+                    <span className="font-mono text-2xl font-black tabular-nums">
                       {inlet}°C
                     </span>
                   </div>
 
-                  <div className="mt-1 flex items-center justify-between text-xs font-mono text-slate-400">
+                  <div className="mt-2 flex items-center justify-between text-xs font-mono text-slate-400">
                     <span>Exhaust:</span>
-                    <span className="tabular-nums text-slate-300">{exhaust}°C</span>
+                    <span className="tabular-nums text-slate-200 font-bold">{exhaust}°C</span>
                   </div>
 
                   <div className="mt-1 flex items-center justify-between text-xs font-mono text-slate-400">
                     <span>Delta-T:</span>
                     <span
-                      className={`tabular-nums font-semibold ${
+                      className={`tabular-nums font-bold ${
                         rackDeltaT > 20
                           ? 'text-rose-400'
                           : rackDeltaT > 15
@@ -218,20 +229,39 @@ export default function HallViewPage() {
                   </div>
                 </div>
 
+                {/* Simulated Server Blade Slots */}
+                <div className="my-3 space-y-1">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5, 6].map((slot) => (
+                      <div
+                        key={slot}
+                        className={`h-1 flex-1 rounded-sm ${
+                          inlet > 32
+                            ? 'bg-rose-500/60'
+                            : inlet > 27
+                            ? 'bg-amber-500/50'
+                            : 'bg-cyan-500/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
                 {/* Power Bar */}
-                <div className="mt-4 pt-2 border-t border-slate-800/60">
+                <div className="pt-2 border-t border-slate-800/60">
                   <div className="flex justify-between text-[11px] font-mono text-slate-400">
                     <span>IT Load</span>
-                    <span className="text-slate-200 font-bold">{activeKw} kW</span>
+                    <span className="text-slate-100 font-bold">{activeKw} kW</span>
                   </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-900 border border-slate-800">
                     <div
-                      className="h-full rounded-full bg-cyan-400"
+                      className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500"
                       style={{ width: `${loadPercent}%` }}
                     />
                   </div>
-                  <div className="mt-1 text-right text-[10px] text-slate-500 font-mono">
-                    Rated: {rack.rated_kw} kW
+                  <div className="mt-1 flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span>{loadPercent.toFixed(0)}% loaded</span>
+                    <span>Rated {rack.rated_kw} kW</span>
                   </div>
                 </div>
               </div>

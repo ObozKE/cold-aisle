@@ -10,6 +10,8 @@ import {
   Activity,
   CheckCircle2,
   ShieldAlert,
+  RotateCw,
+  Waves,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -61,33 +63,36 @@ export default function CoolingPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col justify-between gap-4 rounded-lg border border-noc-border bg-noc-panel p-4 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-lg md:flex-row md:items-center">
         <div>
-          <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
-            COOLING DISTRIBUTION UNIT (CDU) & PRIMARY LOOP
-          </h1>
-          <p className="text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+            <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
+              COOLING DISTRIBUTION UNIT (CDU) & PRIMARY LOOP
+            </h1>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
             In-Row CDU Primary Loop Alpha • Liquid Expansion Reservoir & Loop Pressure Transducers
           </p>
         </div>
 
         {/* Compound Leak Status Pill */}
         <div
-          className={`flex items-center gap-2 rounded border px-3 py-1.5 font-mono text-xs ${
+          className={`flex items-center gap-2.5 rounded-lg border px-4 py-2 font-mono text-xs shadow-md transition-all ${
             isLeakSuspected
-              ? 'border-rose-500 bg-rose-950/40 text-rose-300 animate-pulse font-bold'
-              : 'border-emerald-500/30 bg-emerald-950/20 text-emerald-300'
+              ? 'border-rose-500 bg-rose-950/50 text-rose-300 animate-pulse font-bold shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+              : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
           }`}
         >
           {isLeakSuspected ? (
             <>
-              <AlertOctagon className="h-4 w-4 text-rose-400" />
+              <AlertOctagon className="h-4 w-4 text-rose-400 animate-spin" />
               <span>COMPOUND LEAK SUSPICION: CRITICAL</span>
             </>
           ) : (
             <>
               <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-              <span>LOOP HYDRAULIC INTEGRITY: SECURE</span>
+              <span>LOOP HYDRAULIC INTEGRITY: NOMINAL</span>
             </>
           )}
         </div>
@@ -99,8 +104,9 @@ export default function CoolingPage() {
           title="CDU Reservoir Level"
           value={levelPct.toFixed(1)}
           unit="%"
-          subValue={`${litres.toFixed(1)} L / 80.0 L usable`}
-          status={levelPct < 15 ? 'critical' : levelPct < 30 ? 'warn' : 'normal'}
+          subValue={`${litres.toFixed(1)} L / 80.0 L`}
+          benchmark="Crit: < 15%"
+          status={isLevelCritical ? 'critical' : isLevelWarn ? 'warn' : 'normal'}
           icon={<Droplet className="h-4 w-4" />}
         />
 
@@ -108,7 +114,8 @@ export default function CoolingPage() {
           title="Coolant Loop Pressure"
           value={pressure.toFixed(2)}
           unit="bar"
-          subValue="Nominal closed loop: 2.50 bar"
+          subValue="Nominal: 2.4 - 2.8 bar"
+          benchmark="Crit: < 1.00 bar"
           status={pressure < 1.0 ? 'critical' : pressure < 1.5 ? 'warn' : 'normal'}
           icon={<Gauge className="h-4 w-4" />}
         />
@@ -117,57 +124,81 @@ export default function CoolingPage() {
           title="Ultrasonic Headspace"
           value={distanceCm.toFixed(1)}
           unit="cm"
-          subValue="Tank height: 40 cm (deadzone: 5 cm)"
+          subValue="Probe HC-SR04 #1"
+          benchmark="Max: 40.0 cm"
           status="neutral"
           icon={<Activity className="h-4 w-4" />}
         />
 
         <KpiCard
-          title="Leak Detection Engine"
-          value={isLeakSuspected ? 'ACTIVE' : 'NOMINAL'}
-          subValue="Compound d(Level)/dt + Pressure"
+          title="CDU Circulating Pumps"
+          value="PUMP-1 & 2"
+          unit="DUAL"
+          subValue="Active Duty / Standby"
+          benchmark="3,200 RPM"
           status={isLeakSuspected ? 'critical' : 'normal'}
-          icon={<ShieldAlert className="h-4 w-4" />}
+          icon={<RotateCw className={`h-4 w-4 ${isLeakSuspected ? 'text-rose-400' : 'animate-spin text-cyan-400'}`} style={{ animationDuration: '6s' }} />}
         />
       </div>
 
       {/* Tank Reservoir Graphic & Pressure Trend Graph */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Left: Liquid Tank Visualizer */}
-        <div className="flex flex-col items-center justify-between rounded-lg border border-noc-border bg-noc-panel p-5">
+        <div className="flex flex-col items-center justify-between rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-md">
           <div className="w-full text-left">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-300 font-mono">
-              CDU Expansion Tank
-            </h2>
-            <p className="text-[11px] text-slate-500 font-mono">
-              Geometric Volume Calibration (Model: CDU-01)
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-1.5">
+                <Waves className="h-3.5 w-3.5 text-cyan-400" />
+                CDU Expansion Tank
+              </h2>
+              <span className="font-mono text-[10px] text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
+                MODEL: CDU-01
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500 font-mono">
+              In-Row Closed Loop Primary Reservoir
             </p>
           </div>
 
-          {/* Graphical Tank Column */}
-          <div className="my-4 flex items-center gap-6">
-            <div className="relative h-56 w-24 rounded-lg border-2 border-slate-700 bg-slate-900/80 p-1 shadow-inner overflow-hidden">
+          {/* Graphical Tank Column with Liquid Wave Surface */}
+          <div className="my-5 flex items-center gap-6">
+            <div className="relative h-60 w-28 rounded-xl border-2 border-slate-700 bg-slate-950/90 p-1.5 shadow-2xl overflow-hidden">
+              {/* Glass Reflection Highlight */}
+              <div className="absolute top-0 bottom-0 left-2 w-3 bg-gradient-to-r from-white/10 to-transparent z-20 pointer-events-none" />
+
+              {/* Tick Marks on Left Edge */}
+              <div className="absolute top-2 bottom-2 left-1 flex flex-col justify-between text-[8px] font-mono text-slate-600 z-10 pointer-events-none">
+                <span>100%</span>
+                <span>75%</span>
+                <span>50%</span>
+                <span>25%</span>
+                <span>0%</span>
+              </div>
+
               {/* Fill Column */}
               <div
-                className={`absolute bottom-1 left-1 right-1 rounded-b transition-all duration-700 ease-out ${
+                className={`absolute bottom-1.5 left-1.5 right-1.5 rounded-b-lg transition-all duration-700 ease-out overflow-hidden ${
                   levelPct < 15
-                    ? 'bg-rose-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]'
+                    ? 'bg-gradient-to-t from-rose-700 via-rose-600 to-rose-400 shadow-[0_0_15px_rgba(239,68,68,0.6)]'
                     : levelPct < 30
-                    ? 'bg-amber-500'
-                    : 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                    ? 'bg-gradient-to-t from-amber-700 via-amber-600 to-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                    : 'bg-gradient-to-t from-cyan-700 via-cyan-500 to-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.5)]'
                 }`}
-                style={{ height: `${Math.max(4, levelPct)}%` }}
-              />
+                style={{ height: `${Math.max(5, Math.min(96, levelPct))}%` }}
+              >
+                {/* Surface Liquid Wave Ripple */}
+                <div className="absolute top-0 left-0 right-0 h-2 bg-white/40 animate-pulse-subtle" />
+              </div>
 
-              {/* Threshold Lines */}
+              {/* Threshold Reference Lines */}
               <div
-                className="absolute left-0 right-0 border-t border-dashed border-amber-400/80 text-[9px] text-amber-300 font-mono pl-1"
+                className="absolute left-0 right-0 border-t border-dashed border-amber-400 text-[9px] text-amber-300 font-mono pl-1.5 z-20"
                 style={{ bottom: '30%' }}
               >
                 Warn (30%)
               </div>
               <div
-                className="absolute left-0 right-0 border-t border-dashed border-rose-400/80 text-[9px] text-rose-300 font-mono pl-1"
+                className="absolute left-0 right-0 border-t border-dashed border-rose-500 text-[9px] text-rose-400 font-mono pl-1.5 z-20"
                 style={{ bottom: '15%' }}
               >
                 Crit (15%)
@@ -175,44 +206,50 @@ export default function CoolingPage() {
             </div>
 
             {/* Readout stats */}
-            <div className="space-y-2 font-mono text-xs">
-              <div>
-                <span className="text-slate-500 block text-[10px]">CURRENT FILL</span>
-                <span className="text-xl font-bold text-slate-100">{levelPct.toFixed(1)}%</span>
+            <div className="space-y-3 font-mono text-xs">
+              <div className="rounded-lg bg-slate-900/80 border border-slate-800 p-2.5">
+                <span className="text-slate-500 block text-[10px] font-bold">CURRENT FILL</span>
+                <span className="text-2xl font-black text-slate-100 tabular-nums">
+                  {levelPct.toFixed(1)}%
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px]">STORED VOLUME</span>
-                <span className="text-slate-200 font-semibold">{litres.toFixed(1)} Litres</span>
+                <span className="text-slate-200 font-bold text-sm">{litres.toFixed(1)} L</span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px]">TOTAL CAPACITY</span>
+                <span className="text-slate-500 block text-[10px]">MAX CAPACITY</span>
                 <span className="text-slate-400">80.0 Litres</span>
               </div>
             </div>
           </div>
 
-          <div className="w-full text-center text-[11px] text-slate-500 font-mono border-t border-slate-800 pt-2">
-            Coolant: Distilled Water + 25% Inhibited Propylene Glycol
+          <div className="w-full text-center text-[11px] text-slate-500 font-mono border-t border-slate-800/80 pt-3">
+            Coolant: Distilled Demineralized Water + 25% Inhibited Propylene Glycol
           </div>
         </div>
 
         {/* Right: Pressure History Area Chart */}
-        <div className="col-span-2 rounded-lg border border-noc-border bg-noc-panel p-5">
-          <div className="flex items-center justify-between pb-3">
+        <div className="col-span-2 rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-md">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-300 font-mono">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-300 font-mono flex items-center gap-2">
+                <Gauge className="h-4 w-4 text-cyan-400" />
                 Coolant Loop Hydraulic Pressure Trend
               </h2>
-              <p className="text-[11px] text-slate-500 font-mono">
-                Pressure Transducer (bar) • Warning threshold: 1.50 bar • Critical: 1.00 bar
+              <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                Secondary Loop Supply Manifold • Nominal: 2.6 bar • Warn: &lt;1.5 bar • Crit: &lt;1.0 bar
               </p>
             </div>
-            <span className="font-mono text-xs font-bold text-cyan-400">
-              Live: {pressure.toFixed(2)} bar
-            </span>
+            <div className="flex items-center gap-2 font-mono">
+              <span className="text-xs text-slate-400">Current:</span>
+              <span className="rounded bg-slate-900 px-2.5 py-1 text-sm font-bold text-cyan-300 border border-cyan-800/50 tabular-nums">
+                {pressure.toFixed(2)} bar
+              </span>
+            </div>
           </div>
 
-          <div className="h-56 w-full">
+          <div className="mt-4 h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={pressureHistory.map((d) => ({
@@ -220,6 +257,7 @@ export default function CoolingPage() {
                     ? new Date(d.time_bucket).toLocaleTimeString('en-GB', {
                         hour: '2-digit',
                         minute: '2-digit',
+                        timeZone: 'Africa/Nairobi',
                       })
                     : '',
                   pressure: Number(d.pressure_bar),
@@ -228,11 +266,17 @@ export default function CoolingPage() {
               >
                 <defs>
                   <linearGradient id="pressureGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="time" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                <XAxis
+                  dataKey="time"
+                  stroke="#64748b"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                />
                 <YAxis
                   domain={[0.0, 3.5]}
                   stroke="#64748b"
@@ -241,23 +285,43 @@ export default function CoolingPage() {
                   axisLine={false}
                   tickFormatter={(v) => v.toFixed(1)}
                 />
+                <ReferenceLine
+                  y={1.5}
+                  stroke="#f59e0b"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: 'Warn 1.5 bar',
+                    fill: '#f59e0b',
+                    fontSize: 9,
+                    position: 'insideTopLeft',
+                  }}
+                />
+                <ReferenceLine
+                  y={1.0}
+                  stroke="#ef4444"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: 'Crit 1.0 bar',
+                    fill: '#ef4444',
+                    fontSize: 9,
+                    position: 'insideBottomLeft',
+                  }}
+                />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0f172a',
+                    backgroundColor: '#090d16',
                     borderColor: '#1e293b',
-                    borderRadius: '6px',
+                    borderRadius: '8px',
                     fontSize: '11px',
                     fontFamily: 'monospace',
                   }}
                   formatter={(value: any) => [`${Number(value).toFixed(2)} bar`, 'Loop Pressure']}
                 />
-                <ReferenceLine y={1.5} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: 'Warn: 1.5 bar', fill: '#f59e0b', fontSize: 10 }} />
-                <ReferenceLine y={1.0} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Crit: 1.0 bar', fill: '#ef4444', fontSize: 10 }} />
                 <Area
                   type="monotone"
                   dataKey="pressure"
-                  stroke="#06b6d4"
-                  strokeWidth={2}
+                  stroke="#38bdf8"
+                  strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#pressureGradient)"
                 />

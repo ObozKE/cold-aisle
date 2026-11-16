@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   Play,
   Lock,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { useAuthRole } from '../../context/AuthRoleContext';
 
@@ -122,7 +124,7 @@ const SCENARIOS: ScenarioMeta[] = [
 export default function ScenarioControlPage() {
   const [activeScenario, setActiveScenario] = useState<string>('normal');
   const [loading, setLoading] = useState(false);
-  const [lastInjected, setLastInjected] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const { isAdmin } = useAuthRole();
 
   const ingestUrl = process.env.NEXT_PUBLIC_INGEST_URL || 'http://localhost:4000';
@@ -153,7 +155,8 @@ export default function ScenarioControlPage() {
 
       if (res.ok) {
         setActiveScenario(scenarioId);
-        setLastInjected(scenarioId);
+        setFeedbackMsg(`Profile [${scenarioId.toUpperCase()}] successfully injected at ${new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Nairobi' })} EAT.`);
+        setTimeout(() => setFeedbackMsg(null), 4000);
       }
     } catch (err) {
       console.error('Failed to inject scenario', err);
@@ -165,26 +168,50 @@ export default function ScenarioControlPage() {
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col justify-between gap-4 rounded-lg border border-noc-border bg-noc-panel p-4 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-lg md:flex-row md:items-center">
         <div>
-          <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
-            NOC SCENARIO CONTROL & FAULT INJECTION
-          </h1>
-          <p className="text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+            <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
+              NOC SCENARIO CONTROL & FAULT INJECTION
+            </h1>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
             Demonstration testbench • Inject physical failure profiles into the digital twin simulator
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/80 px-3 py-1.5 font-mono text-xs">
-          <span className="text-slate-400">ACTIVE SCENARIO:</span>
-          <span className="font-bold text-cyan-400 uppercase tracking-wider">
-            [{activeScenario.toUpperCase()}]
-          </span>
+        <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
+          <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3.5 py-2 shadow-md">
+            <span className="text-slate-400">CURRENT PROFILE:</span>
+            <span className="font-bold text-cyan-400 uppercase tracking-wider">
+              [{activeScenario.toUpperCase()}]
+            </span>
+          </div>
+
+          {activeScenario !== 'normal' && isAdmin && (
+            <button
+              onClick={() => handleInject('normal')}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-950/40 px-3.5 py-2 text-emerald-300 hover:bg-emerald-900/50 transition-colors shadow-md font-bold"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>RESET TO BASELINE</span>
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Real-time Feedback Toast */}
+      {feedbackMsg && (
+        <div className="flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-950/40 px-4 py-2.5 font-mono text-xs text-cyan-300 shadow-lg animate-pulse">
+          <Sparkles className="h-4 w-4 text-cyan-400" />
+          <span>{feedbackMsg}</span>
+        </div>
+      )}
+
       {/* Scenario Grid */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
         {SCENARIOS.map((sc) => {
           const Icon = sc.icon;
           const isActive = activeScenario === sc.id;
@@ -192,9 +219,9 @@ export default function ScenarioControlPage() {
           return (
             <div
               key={sc.id}
-              className={`flex flex-col justify-between rounded-lg border p-5 transition-all ${sc.bgColor} ${
+              className={`flex flex-col justify-between rounded-xl border p-5 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 ${sc.bgColor} ${
                 isActive
-                  ? 'border-cyan-400 shadow-[0_0_16px_rgba(56,189,248,0.25)] ring-1 ring-cyan-400/50'
+                  ? 'border-cyan-400 shadow-[0_0_20px_rgba(56,189,248,0.3)] ring-1 ring-cyan-400/50'
                   : sc.borderColor
               }`}
             >
@@ -207,7 +234,7 @@ export default function ScenarioControlPage() {
                     </span>
                   </div>
                   {isActive && (
-                    <span className="rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 font-mono text-[10px] font-bold">
+                    <span className="rounded-md bg-cyan-500/25 text-cyan-300 border border-cyan-500/50 px-2 py-0.5 font-mono text-[10px] font-bold shadow-sm">
                       ACTIVE
                     </span>
                   )}
@@ -217,13 +244,14 @@ export default function ScenarioControlPage() {
                   {sc.summary}
                 </p>
 
-                <div className="mt-3 font-mono text-[11px] text-slate-400 space-y-1">
-                  <div>
-                    <strong className="text-slate-300">Physics:</strong> {sc.expectedBehavior}
+                <div className="mt-4 font-mono text-[11px] text-slate-400 space-y-2">
+                  <div className="rounded-lg bg-slate-900/60 p-2.5 border border-slate-800">
+                    <strong className="text-slate-300 block text-[10px] uppercase">Physics Profile:</strong>
+                    <span className="text-slate-400 mt-0.5 block">{sc.expectedBehavior}</span>
                   </div>
                   <div>
-                    <strong className="text-slate-300">Expected Alerts:</strong>
-                    <ul className="list-disc pl-4 text-slate-400 mt-0.5 space-y-0.5">
+                    <strong className="text-slate-300 text-[10px] uppercase">Expected Triggers:</strong>
+                    <ul className="list-disc pl-4 text-slate-400 mt-1 space-y-0.5 text-[11px]">
                       {sc.expectedAlerts.map((alt, i) => (
                         <li key={i}>{alt}</li>
                       ))}
@@ -232,17 +260,17 @@ export default function ScenarioControlPage() {
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-slate-800/60">
+              <div className="mt-5 pt-3.5 border-t border-slate-800/80">
                 <button
                   disabled={loading || isActive || !isAdmin}
                   onClick={() => handleInject(sc.id)}
                   title={!isAdmin ? 'Admin role required to trigger fault injection profiles' : undefined}
-                  className={`w-full flex items-center justify-center gap-2 rounded px-4 py-2 font-mono text-xs font-bold transition-all ${
+                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-mono text-xs font-bold transition-all shadow-md ${
                     !isAdmin
                       ? 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
                       : isActive
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                      : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400 shadow-md'
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400 hover:shadow-cyan-500/20 shadow-lg'
                   }`}
                 >
                   {!isAdmin ? (

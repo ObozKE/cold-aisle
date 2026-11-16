@@ -1,44 +1,107 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db/pool.js';
+import { getLatestTelemetrySummary } from '../../services/telemetryProcessor.js';
 
 export const telemetryQueryRouter = Router();
 
-// Overview summary KPIs
+// Fast in-memory cache for counts & query history (2s TTL)
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+let countsCache: CacheEntry<{ alertCounts: any; deviceCounts: any }> | null = null;
+const historyCache = new Map<string, CacheEntry<any>>();
+
+function getCached<T>(key: string): T | null {
+  const entry = historyCache.get(key);
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setCached<T>(key: string, data: T, ttlMs = 2000): void {
+  historyCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+// Overview summary KPIs - Sub-millisecond execution via in-memory twin state
 telemetryQueryRouter.get('/telemetry/summary', async (req: Request, res: Response) => {
   try {
-    const pueRes = await pool.query(
-      `SELECT pue, it_kw, cooling_kw, ups_loss_kw, other_kw, total_kw, ts 
-       FROM pue_samples 
-       ORDER BY ts DESC LIMIT 1`
-    );
+    const latestSummary = getLatestTelemetrySummary();
 
-    const alertsRes = await pool.query(
-      `SELECT 
-         COUNT(*) FILTER (WHERE state != 'resolved') as active_total,
-         COUNT(*) FILTER (WHERE state != 'resolved' AND severity = 'critical') as active_critical,
-         COUNT(*) FILTER (WHERE state != 'resolved' AND severity = 'warn') as active_warn
-       FROM alerts`
-    );
+    const now = Date.now();
+    let alertCounts: any;
+    let deviceCounts: any;
 
-    const devicesRes = await pool.query(
-      `SELECT 
-         COUNT(*) as total,
-         COUNT(*) FILTER (WHERE status = 'online') as online,
-         COUNT(*) FILTER (WHERE status = 'stale') as stale,
-         COUNT(*) FILTER (WHERE status = 'offline') as offline
-       FROM devices`
-    );
+    if (countsCache && countsCache.expiresAt > now) {
+      alertCounts = countsCache.data.alertCounts;
+      deviceCounts = countsCache.data.deviceCounts;
+    } else {
+      const [alertsRes, devicesRes] = await Promise.all([
+        pool.query(
+          `SELECT 
+             COUNT(*) FILTER (WHERE state != 'resolved') as active_total,
+             COUNT(*) FILTER (WHERE state != 'resolved' AND severity = 'critical') as active_critical,
+             COUNT(*) FILTER (WHERE state != 'resolved' AND severity = 'warn') as active_warn
+           FROM alerts`
+        ),
+        pool.query(
+          `SELECT 
+             COUNT(*) as total,
+             COUNT(*) FILTER (WHERE status = 'online') as online,
+             COUNT(*) FILTER (WHERE status = 'stale') as stale,
+             COUNT(*) FILTER (WHERE status = 'offline') as offline
+           FROM devices`
+        ),
+      ]);
 
-    // Latest readings for temperature, fuel runtime, etc.
-    const latestReadingsRes = await pool.query(
-      `SELECT s.code, r.value, r.ts
-       FROM (
-         SELECT DISTINCT ON (sensor_id) sensor_id, value, ts 
-         FROM readings 
-         ORDER BY sensor_id, ts DESC
-       ) r
-       JOIN sensors s ON r.sensor_id = s.id`
-    );
+      alertCounts = alertsRes.rows[0] || { active_total: 0, active_critical: 0, active_warn: 0 };
+      deviceCounts = devicesRes.rows[0] || { total: 0, online: 0, stale: 0, offline: 0 };
+      countsCache = {
+        data: { alertCounts, deviceCounts },
+        expiresAt: now + 2000,
+      };
+    }
+
+    if (latestSummary) {
+      // High-speed path: zero database table scans
+      res.setHeader('X-Cache', 'HIT-MEMORY');
+      res.status(200).json({
+        latestPue: {
+          pue: latestSummary.pue.pue,
+          it_kw: latestSummary.pue.it_kw,
+          cooling_kw: latestSummary.pue.cooling_kw,
+          ups_loss_kw: latestSummary.pue.ups_loss_kw,
+          other_kw: latestSummary.pue.other_kw,
+          total_kw: latestSummary.pue.total_kw,
+          ts: latestSummary.ts,
+        },
+        alertCounts,
+        deviceCounts,
+        readings: latestSummary.readings,
+      });
+      return;
+    }
+
+    // Cold-start fallback: query DB once until first telemetry packet arrives
+    res.setHeader('X-Cache', 'MISS-COLD');
+    const [pueRes, latestReadingsRes] = await Promise.all([
+      pool.query(
+        `SELECT pue, it_kw, cooling_kw, ups_loss_kw, other_kw, total_kw, ts 
+         FROM pue_samples 
+         ORDER BY ts DESC LIMIT 1`
+      ),
+      pool.query(
+        `SELECT s.code, r.value, r.ts
+         FROM (
+           SELECT DISTINCT ON (sensor_id) sensor_id, value, ts 
+           FROM readings 
+           ORDER BY sensor_id, ts DESC
+         ) r
+         JOIN sensors s ON r.sensor_id = s.id`
+      ),
+    ]);
 
     const readingsMap: Record<string, number> = {};
     for (const r of latestReadingsRes.rows) {
@@ -47,8 +110,8 @@ telemetryQueryRouter.get('/telemetry/summary', async (req: Request, res: Respons
 
     res.status(200).json({
       latestPue: pueRes.rows[0] || null,
-      alertCounts: alertsRes.rows[0] || { active_total: 0, active_critical: 0, active_warn: 0 },
-      deviceCounts: devicesRes.rows[0] || { total: 0, online: 0, stale: 0, offline: 0 },
+      alertCounts,
+      deviceCounts,
       readings: readingsMap,
     });
   } catch (err: any) {
@@ -59,7 +122,16 @@ telemetryQueryRouter.get('/telemetry/summary', async (req: Request, res: Respons
 // PUE 1-hour time-bucketed trend for Recharts
 telemetryQueryRouter.get('/telemetry/pue-history', async (req: Request, res: Response) => {
   try {
-    const hours = Math.min(24, parseInt((req.query.hours as string) || '1', 10));
+    const hours = Math.min(24, Math.max(1, parseInt((req.query.hours as string) || '1', 10)));
+    const cacheKey = `pue-history:${hours}`;
+    const cached = getCached<any[]>(cacheKey);
+
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT');
+      res.status(200).json({ samples: cached });
+      return;
+    }
+
     const result = await pool.query(
       `SELECT 
          date_trunc('minute', ts) as time_bucket,
@@ -68,11 +140,14 @@ telemetryQueryRouter.get('/telemetry/pue-history', async (req: Request, res: Res
          ROUND(AVG(cooling_kw)::numeric, 2) as cooling_kw,
          ROUND(AVG(total_kw)::numeric, 2) as total_kw
        FROM pue_samples
-       WHERE ts >= NOW() - INTERVAL '${hours} hours'
+       WHERE ts >= NOW() - ($1 || ' hours')::interval
        GROUP BY time_bucket
-       ORDER BY time_bucket ASC`
+       ORDER BY time_bucket ASC`,
+      [hours.toString()]
     );
 
+    setCached(cacheKey, result.rows, 3000);
+    res.setHeader('X-Cache', 'MISS');
     res.status(200).json({ samples: result.rows });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -82,6 +157,15 @@ telemetryQueryRouter.get('/telemetry/pue-history', async (req: Request, res: Res
 // Coolant loop pressure history for Cooling view
 telemetryQueryRouter.get('/telemetry/pressure-history', async (req: Request, res: Response) => {
   try {
+    const cacheKey = 'pressure-history:1';
+    const cached = getCached<any[]>(cacheKey);
+
+    if (cached) {
+      res.setHeader('X-Cache', 'HIT');
+      res.status(200).json({ samples: cached });
+      return;
+    }
+
     const result = await pool.query(
       `SELECT 
          date_trunc('minute', r.ts) as time_bucket,
@@ -94,6 +178,8 @@ telemetryQueryRouter.get('/telemetry/pressure-history', async (req: Request, res
        ORDER BY time_bucket ASC`
     );
 
+    setCached(cacheKey, result.rows, 3000);
+    res.setHeader('X-Cache', 'MISS');
     res.status(200).json({ samples: result.rows });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

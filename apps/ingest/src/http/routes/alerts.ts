@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db/pool.js';
 import { cancelAlertEscalation } from '../../escalation/policyRunner.js';
+import { ruleEngine } from '../../engine/rules.js';
 
 export const alertsRouter = Router();
 
@@ -63,6 +64,9 @@ alertsRouter.post('/alerts/:id/ack', async (req: Request, res: Response): Promis
 
     // Stop escalation chain immediately
     cancelAlertEscalation(alertId);
+
+    // Keep ruleEngine in-memory cache synchronized
+    ruleEngine.invalidateActiveAlert(updated.dedupe_key);
 
     res.status(200).json({ alert: updated });
   } catch (err: any) {

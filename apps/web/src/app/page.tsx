@@ -77,29 +77,32 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       {/* Top Facility Banner */}
-      <div className="flex flex-col justify-between gap-4 rounded-lg border border-noc-border bg-noc-panel p-4 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-noc-border bg-noc-panel p-5 backdrop-blur-md shadow-lg md:flex-row md:items-center">
         <div>
-          <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
-            DATA HALL ALPHA & BETA TELEMETRY TWIN
-          </h1>
-          <p className="text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+            <h1 className="font-mono text-xl font-bold tracking-tight text-slate-100">
+              DATA HALL ALPHA & BETA TELEMETRY TWIN
+            </h1>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
             Primary Facility NOC Dashboard • High-Density In-Row Cooling & Power Infrastructure
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs font-mono">
+          <div className="flex items-center gap-2.5 rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs font-mono shadow-md">
             <span className="text-slate-400">FACILITY STATUS:</span>
             {activeCritical > 0 ? (
-              <span className="flex items-center gap-1 font-bold text-rose-400 animate-pulse">
+              <span className="flex items-center gap-1.5 font-bold text-rose-400 animate-pulse">
                 <ShieldAlert className="h-4 w-4" /> CRITICAL INCIDENT ({activeCritical})
               </span>
             ) : activeWarn > 0 ? (
-              <span className="flex items-center gap-1 font-bold text-amber-400">
+              <span className="flex items-center gap-1.5 font-bold text-amber-400">
                 <AlertTriangle className="h-4 w-4" /> WARNING ({activeWarn})
               </span>
             ) : (
-              <span className="flex items-center gap-1 font-bold text-emerald-400">
+              <span className="flex items-center gap-1.5 font-bold text-emerald-400">
                 <CheckCircle2 className="h-4 w-4" /> OPTIMAL
               </span>
             )}
@@ -113,7 +116,8 @@ export default function OverviewPage() {
           title="Avg Cold-Aisle Supply"
           value={liveColdTemp.toFixed(1)}
           unit="°C"
-          subValue="ASHRAE Recommended: 18 - 27 °C"
+          subValue="ASHRAE TC 9.9 Envelope"
+          benchmark="Range: 18 - 27 °C"
           status={liveColdTemp > 32 ? 'critical' : liveColdTemp > 27 ? 'warn' : 'normal'}
           icon={<Thermometer className="h-4 w-4" />}
         />
@@ -122,6 +126,7 @@ export default function OverviewPage() {
           title="Active Facility Alerts"
           value={activeAlerts.length}
           subValue={`${activeCritical} Critical • ${activeWarn} Warning`}
+          benchmark="Target: 0 Active"
           status={activeCritical > 0 ? 'critical' : activeWarn > 0 ? 'warn' : 'normal'}
           icon={<AlertTriangle className="h-4 w-4" />}
         />
@@ -131,6 +136,7 @@ export default function OverviewPage() {
           value={liveDieselRuntime.toFixed(1)}
           unit="hrs"
           subValue={`${liveDieselLitres.toFixed(0)} L stored fuel`}
+          benchmark="Min Reserve: 4h"
           status={liveDieselRuntime < 2 ? 'critical' : liveDieselRuntime < 4 ? 'warn' : 'normal'}
           icon={<Fuel className="h-4 w-4" />}
         />
@@ -140,6 +146,7 @@ export default function OverviewPage() {
           value={liveItKw.toFixed(1)}
           unit="kW"
           subValue="Telemetry Rack Loop Alpha"
+          benchmark="Rated: 15.0 kW"
           status="neutral"
           icon={<Cpu className="h-4 w-4" />}
         />
